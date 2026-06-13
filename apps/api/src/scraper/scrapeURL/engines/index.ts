@@ -442,7 +442,7 @@ const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
-      stealthProxy: true, // kinda...
+      stealthProxy: false,
       branding: false,
       disableAdblock: true,
     },
@@ -463,7 +463,7 @@ const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
-      stealthProxy: true, // kinda...
+      stealthProxy: false,
       branding: false,
       disableAdblock: true,
     },
