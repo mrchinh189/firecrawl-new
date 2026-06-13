@@ -14,6 +14,7 @@ import {
   StoredCrawl,
   markCrawlActive,
 } from "../../lib/crawl-redis";
+import { getRequestHostname } from "../../lib/host-utils";
 import { _addScrapeJobToBullMQ } from "../../services/queue-jobs";
 import { logger as _logger } from "../../lib/logger";
 import { fromV1ScrapeOptions } from "../v2/types";
@@ -200,6 +201,6 @@ export async function crawlController(
   return res.status(200).json({
     success: true,
     id,
-    url: `${protocol}://${req.get("host")}/v1/crawl/${id}`,
+    url: `${protocol}://${getRequestHostname(req)}/v1/crawl/${id}`,
   });
 }

@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { z } from "zod";
 import { logger as _logger } from "../../lib/logger";
+import { getRequestHostname } from "../../lib/host-utils";
 import { RequestWithAuth } from "./types";
 import { getScrapeZDR } from "../../lib/zdr-helpers";
 import { getMonitorDiffArtifact } from "../../lib/gcs-monitoring";
@@ -553,7 +554,7 @@ export async function getMonitorCheckController(
     if (totalPagesForFilter <= nextSkip) return undefined;
     const url = new URL(
       `/v2/monitor/${monitorId}/checks/${checkId}`,
-      `${req.protocol}://${req.get("host")}`,
+      `${req.protocol}://${getRequestHostname(req)}`,
     );
     url.searchParams.set("skip", String(nextSkip));
     url.searchParams.set("limit", String(query.limit));
@@ -584,7 +585,11 @@ const emailActionBodySchema = z.object({
 type EmailActionResponse =
   | {
       success: true;
-      result: "confirmed" | "already_confirmed" | "unsubscribed" | "already_unsubscribed";
+      result:
+        | "confirmed"
+        | "already_confirmed"
+        | "unsubscribed"
+        | "already_unsubscribed";
       email: string;
       monitorName: string | null;
     }
@@ -592,7 +597,6 @@ type EmailActionResponse =
       success: false;
       error: "invalid_token" | "not_found" | "internal_error";
     };
-
 
 function parseTokenFromRequest(req: { body?: unknown }): string | null {
   const candidate =
