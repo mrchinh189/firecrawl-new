@@ -21,6 +21,7 @@ import {
   handleIntegrationAdminValidateProxy,
 } from "../lib/admin-integration-integrations-proxy";
 import { RateLimiterMode } from "../types";
+import { checkChangeTrackingController } from "../controllers/v0/admin/check-change-tracking";
 
 export const adminRouter = express.Router();
 
@@ -96,4 +97,9 @@ adminRouter.post(
 adminRouter.post(
   `/admin/integration/rotate-api-key`,
   wrap(handleIntegrationAdminRotateProxy),
+);
+
+adminRouter.post(
+  `/admin/${config.BULL_AUTH_KEY}/change-tracking-health`,
+  wrap(checkChangeTrackingController),
 );
