@@ -18,7 +18,8 @@ type Provider =
   | "openrouter"
   | "fireworks"
   | "deepinfra"
-  | "vertex";
+  | "vertex"
+  | "minimax";
 const defaultProvider: Provider = config.OLLAMA_BASE_URL ? "ollama" : "openai";
 
 const providerList: Record<Provider, any> = {
@@ -51,6 +52,10 @@ const providerList: Record<Provider, any> = {
           keyFile: "./gke-key.json",
         },
   }),
+  minimax: createOpenAI({
+    apiKey: config.MINIMAX_API_KEY,
+    baseURL: config.MINIMAX_BASE_URL || "https://api.minimax.io/v1",
+  }), //MINIMAX_API_KEY
 };
 
 export function getModel(name: string, provider: Provider = defaultProvider) {
@@ -61,6 +66,10 @@ export function getModel(name: string, provider: Provider = defaultProvider) {
   // o3-mini returns empty text via the Responses API — force Chat Completions
   if (provider === "openai" && modelName.startsWith("o3-mini")) {
     return providerList.openai.chat(modelName);
+  }
+  // MiniMax does not support the Responses API — force Chat Completions
+  if (provider === "minimax") {
+    return providerList.minimax.chat(modelName);
   }
   return providerList[provider](modelName);
 }
