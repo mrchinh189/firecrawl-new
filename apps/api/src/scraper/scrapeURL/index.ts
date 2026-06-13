@@ -125,7 +125,7 @@ export type Meta = {
         filePath: string;
         url?: string;
         status: number;
-        proxyUsed: "basic" | "stealth";
+        proxyUsed: "basic" | "stealth" | "enhanced";
         contentType?: string;
       }
     | null
@@ -135,7 +135,7 @@ export type Meta = {
         filePath: string;
         url?: string;
         status: number;
-        proxyUsed: "basic" | "stealth";
+        proxyUsed: "basic" | "stealth" | "enhanced";
         contentType?: string;
       }
     | null
@@ -145,7 +145,7 @@ export type Meta = {
         url?: string;
         status: number;
         bodyBuffer: Buffer;
-        proxyUsed: "basic" | "stealth";
+        proxyUsed: "basic" | "stealth" | "enhanced";
         contentType?: string;
       }
     | null

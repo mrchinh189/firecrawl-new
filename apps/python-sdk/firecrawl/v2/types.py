@@ -116,7 +116,7 @@ class DocumentMetadata(BaseModel):
     scrape_id: Optional[str] = None
     num_pages: Optional[int] = None
     content_type: Optional[str] = None
-    proxy_used: Optional[Literal["basic", "stealth"]] = None
+    proxy_used: Optional[Literal["basic", "stealth", "enhanced"]] = None
     timezone: Optional[str] = None
     cache_state: Optional[Literal["hit", "miss"]] = None
     cached_at: Optional[str] = None

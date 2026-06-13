@@ -1067,7 +1067,7 @@ export type Document = {
     numPages?: number;
     contentType?: string;
     timezone?: string;
-    proxyUsed: "basic" | "stealth";
+    proxyUsed: "basic" | "stealth" | "enhanced";
     cacheState?: "hit" | "miss";
     cachedAt?: string;
     creditsUsed?: number;
