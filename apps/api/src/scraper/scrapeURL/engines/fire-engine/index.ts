@@ -1,4 +1,4 @@
-import { Logger } from "winston";
+  }import { Logger } from "winston";
 import { Meta } from "../..";
 import {
   fireEngineScrape,
@@ -30,6 +30,8 @@ import { specialtyScrapeCheck } from "../utils/specialtyHandler";
 import { fireEngineDelete } from "./delete";
 import { MockState } from "../../lib/mock";
 import { getInnerJson } from "@mendable/firecrawl-rs";
+import { isIPPrivate } from "../utils/safeFetch";
+import { config } from "../../../../config";
 import { hasFormatOfType } from "../../../../lib/format-utils";
 import { InternalAction } from "../../../../controllers/v1/types";
 import { AbortManagerThrownError } from "../../lib/abortManager";
@@ -58,6 +60,29 @@ async function performFireEngineScrape<
   abort?: AbortSignal,
   production = true,
 ): Promise<FireEngineCheckStatusSuccess> {
+  if (config.ALLOW_LOCAL_WEBHOOKS !== true) {
+    let parsed: URL;
+    try {
+      parsed = new URL(request.url);
+    } catch (_) {
+      throw new EngineError("Invalid URL: unable to parse request URL");
+    }
+    if (isIPPrivate(parsed.hostname) || parsed.hostname === "metadata.google.internal") {
+      throw new EngineError("URL points to a private/internal network address");
+    }
+    try {
+      const { promises: dnsPromises } = await import("dns");
+      const addresses = await dnsPromises.resolve(parsed.hostname).catch(() => [parsed.hostname]);
+      for (const addr of addresses) {
+        if (isIPPrivate(addr)) {
+          throw new EngineError("URL resolves to a private/internal network address");
+        }
+      }
+    } catch (e) {
+      if (e instanceof EngineError) throw e;
+      throw new EngineError("URL validation failed: unable to resolve hostname");
+    }
+  }
   return withSpan("engine.fire-engine.perform_scrape", async span => {
     const startTime = Date.now();
     let pollCount = 0;
