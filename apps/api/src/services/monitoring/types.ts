@@ -36,7 +36,45 @@ const crawlTargetSchema = z.strictObject({
   scrapeOptions: scrapeOptionsSchema,
 });
 
-const monitorTargetSchema = z.union([scrapeTargetSchema, crawlTargetSchema]);
+const monitorDomainSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine(
+    value =>
+      /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/.test(
+        value,
+      ),
+    "Domain must be a valid hostname without protocol or path",
+  );
+
+const searchTargetSchema = z.strictObject({
+  id: z.string().uuid().optional(),
+  type: z.literal("search"),
+  queries: z.array(z.string().min(1).max(256)).min(1).max(12),
+  searchWindow: z
+    .enum(["5m", "15m", "1h", "6h", "24h", "7d"])
+    .optional()
+    .default("24h"),
+  alertMode: z
+    .enum(["first_match", "every_new_result", "material_dev"])
+    .optional()
+    .default("first_match"),
+  // "deep" scrapes + judges routed pages (extract tier); "standard" judges
+  // from SERP snippets only — no page fetches, the cheap tier.
+  depth: z.enum(["standard", "deep"]).optional().default("deep"),
+  includeDomains: z.array(monitorDomainSchema).max(50).optional(),
+  excludeDomains: z.array(monitorDomainSchema).max(50).optional(),
+  recheckAfter: z.enum(["1h", "6h", "24h", "7d"]).optional(),
+  maxResults: z.number().int().min(1).max(50).optional().default(10),
+  scrapeOptions: scrapeOptionsSchema,
+});
+
+const monitorTargetSchema = z.union([
+  scrapeTargetSchema,
+  crawlTargetSchema,
+  searchTargetSchema,
+]);
 
 const monitorWebhookSchema = createWebhookSchema([
   "monitor.page",
@@ -119,15 +157,66 @@ const createMonitorBaseSchema = z.strictObject({
   origin: z.string().optional().prefault("api"),
 });
 
-export const createMonitorSchema = createMonitorBaseSchema.transform(
-  applyJudgeEnabledDefault,
-);
+// A search target can only be judged with a goal — enforce it whenever one is present.
+function requireGoalForSearchTargets(
+  input: { targets?: unknown; goal?: unknown },
+  ctx: z.RefinementCtx,
+): void {
+  const targets = input.targets;
+  if (!Array.isArray(targets)) return;
+  const hasSearchTarget = targets.some(
+    t =>
+      t && typeof t === "object" && (t as { type?: unknown }).type === "search",
+  );
+  const goal = input.goal;
+  if (
+    hasSearchTarget &&
+    (typeof goal !== "string" || goal.trim().length === 0)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "A search target requires a non-empty goal",
+      path: ["goal"],
+    });
+  }
+}
+
+export const createMonitorSchema = createMonitorBaseSchema
+  .superRefine(requireGoalForSearchTargets)
+  .transform(applyJudgeEnabledDefault);
+
+// Update bodies are partial: a patch adding search targets may rely on the
+// goal already stored on the monitor, so only reject here when the patch
+// itself includes search targets AND explicitly clears the goal. The
+// controller re-validates the merged monitor (stored row + patch).
+function rejectGoalClearedWithSearchTargets(
+  input: { targets?: unknown; goal?: unknown },
+  ctx: z.RefinementCtx,
+): void {
+  const targets = input.targets;
+  if (!Array.isArray(targets)) return;
+  const hasSearchTarget = targets.some(
+    t =>
+      t && typeof t === "object" && (t as { type?: unknown }).type === "search",
+  );
+  if (!hasSearchTarget) return;
+  const goal = input.goal;
+  if (goal === undefined) return;
+  if (goal === null || (typeof goal === "string" && goal.trim().length === 0)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "A search target requires a non-empty goal",
+      path: ["goal"],
+    });
+  }
+}
 
 export const updateMonitorSchema = createMonitorBaseSchema
   .partial()
   .extend({
     status: z.enum(["active", "paused"]).optional(),
   })
+  .superRefine(rejectGoalClearedWithSearchTargets)
   .refine(x => Object.keys(x).length > 0, "Update body cannot be empty")
   .transform(applyJudgeEnabledDefault);
 

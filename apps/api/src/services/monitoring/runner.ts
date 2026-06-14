@@ -32,6 +32,7 @@ import {
   toV0CrawlerOptions,
 } from "../../controllers/v2/types";
 import { createWebhookSender, WebhookEvent } from "../webhook";
+import { sendMonitorPageWebhook } from "./results";
 import { sendMonitoringEmailSummary } from "../notification/monitoring_email";
 import {
   calculateMonitorCheckActualCredits,
@@ -64,6 +65,12 @@ import {
   MONITOR_CHECK_STALE_TIMEOUT_MS,
 } from "./stale";
 import { trackMonitorCheckStartedInterest } from "./interest";
+import { runSearchTarget } from "./search/run";
+import { computeGoalVersion } from "./search/dedupe";
+import {
+  reconstructKnownState,
+  searchStatusToPageStatus,
+} from "./search/persist";
 
 const logger = _logger.child({ module: "monitoring-runner" });
 const poll = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -106,6 +113,15 @@ type MonitorTargetRun =
       targetId: string;
       type: "crawl";
       crawlId: string;
+    }
+  | {
+      // Search runs inline during dispatch (self-contained: search + scrape + judge),
+      // so its run descriptor needs no async handle. Summary/counts are filled in after it runs.
+      targetId: string;
+      type: "search";
+      resultCount?: number;
+      matches?: number;
+      summary?: string;
     };
 
 function createMonitorTargetRun(target: MonitorTarget): MonitorTargetRun {
@@ -114,6 +130,13 @@ function createMonitorTargetRun(target: MonitorTarget): MonitorTargetRun {
       targetId: target.id,
       type: "scrape",
       expectedJobs: target.urls.map(() => uuidv7()),
+    };
+  }
+
+  if (target.type === "search") {
+    return {
+      targetId: target.id,
+      type: "search",
     };
   }
 
@@ -938,6 +961,130 @@ async function enqueueMonitorCrawlTarget(params: {
   return params.targetRun;
 }
 
+// Credit attribution via the canonical estimator: scraped results ran a json extraction,
+// already-seen results skip the scrape, failures bill the base scrape credit.
+const SEARCH_JSON_DOC = { json: {} } as const;
+const SEARCH_JSON_OPTS = { formats: [{ type: "json" }] } as const;
+function searchPageCredits(status: string, scraped: boolean): number {
+  if (status === "already_seen") return 0;
+  if (scraped) {
+    return estimateActualCredits(SEARCH_JSON_DOC, SEARCH_JSON_OPTS);
+  }
+  return 0;
+}
+
+// Runs inline (owns its search + scrape + judge), then persists onto the same
+// monitor_pages / monitor_check_pages tables the reconciler tallies.
+async function runMonitorSearchTarget(params: {
+  monitor: MonitorRow;
+  check: MonitorCheckRow;
+  target: MonitorTarget;
+}): Promise<{
+  pages: PageResult[];
+  resultCount: number;
+  matches: number;
+  summary: string;
+}> {
+  if (params.target.type !== "search") {
+    return { pages: [], resultCount: 0, matches: 0, summary: "" };
+  }
+  const { monitor, check, target } = params;
+  const goalVersion = computeGoalVersion(monitor.goal, target.queries);
+
+  // Rebuild per-URL dedup memory + the event index from prior pages of this target.
+  const priorPages = await listActiveMonitorPages({
+    monitorId: monitor.id,
+    targetId: target.id,
+  });
+  const { knownPages, knownEvents } = reconstructKnownState(
+    priorPages,
+    goalVersion,
+  );
+
+  const result = await runSearchTarget({
+    monitor: {
+      id: monitor.id,
+      teamId: monitor.team_id,
+      goal: monitor.goal,
+      subject: monitor.name,
+    },
+    target: {
+      id: target.id,
+      queries: target.queries,
+      searchWindow: target.searchWindow,
+      alertMode: target.alertMode,
+      includeDomains: target.includeDomains,
+      excludeDomains: target.excludeDomains,
+      recheckAfter: target.recheckAfter,
+      maxResults: target.maxResults,
+      depth: target.depth,
+    },
+    goalVersion,
+    knownPages,
+    knownEvents,
+    zeroDataRetention: false,
+    logger: logger.child({
+      monitorId: monitor.id,
+      checkId: check.id,
+      targetId: target.id,
+    }),
+  });
+
+  const pages: PageResult[] = [];
+  for (const upsert of result.pageUpserts) {
+    const status = searchStatusToPageStatus(upsert.status);
+    const creditsUsed = searchPageCredits(
+      upsert.status,
+      upsert.scraped ?? false,
+    );
+    const metadata = { ...upsert.metadata, creditsUsed };
+    await upsertMonitorPage({
+      monitorId: monitor.id,
+      teamId: monitor.team_id,
+      targetId: target.id,
+      url: upsert.url,
+      source: "discovered",
+      checkId: check.id,
+      scrapeId: null,
+      status,
+      metadata,
+    });
+    pages.push({
+      check_id: check.id,
+      monitor_id: monitor.id,
+      team_id: monitor.team_id,
+      target_id: target.id,
+      url: upsert.url,
+      url_hash: upsert.urlHash,
+      status,
+      metadata,
+      judgment: upsert.judgment ?? null,
+      emailStatus: status,
+    });
+  }
+  await insertMonitorCheckPages(pages);
+
+  for (const page of pages) {
+    if (page.status !== "new" && page.status !== "error") continue;
+    await sendMonitorPageWebhook({
+      teamId: monitor.team_id,
+      monitorId: monitor.id,
+      checkId: check.id,
+      url: page.url,
+      status: page.status,
+      error: page.error ?? null,
+      judgment: page.judgment ?? null,
+    });
+  }
+
+  return {
+    pages,
+    resultCount: result.resultCount,
+    matches: result.matches,
+    summary: result.summary,
+  };
+}
+
 export async function processMonitorCheckJob(
   job: MonitorCheckJobData,
 ): Promise<void> {
@@ -1029,8 +1176,23 @@ export async function processMonitorCheckJob(
         await enqueueMonitorScrapeTarget({ monitor, check, target, targetRun });
       } else if (target.type === "crawl" && targetRun.type === "crawl") {
         await enqueueMonitorCrawlTarget({ monitor, check, target, targetRun });
+      } else if (target.type === "search" && targetRun.type === "search") {
+        // Search is synchronous: run it now and fold its outcome back into target_results
+        // so the reconciler (which treats search runs as already-complete) finalizes the check.
+        const searchResult = await runMonitorSearchTarget({
+          monitor,
+          check,
+          target,
+        });
+        targetRun.resultCount = searchResult.resultCount;
+        targetRun.matches = searchResult.matches;
+        targetRun.summary = searchResult.summary;
       }
     }
+
+    await updateMonitorCheck(check.id, {
+      target_results: targetResults,
+    });
   } catch (error) {
     if (lockId) {
       await autumnService.finalizeCreditsLock({

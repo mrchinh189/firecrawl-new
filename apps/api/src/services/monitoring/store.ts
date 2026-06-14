@@ -143,6 +143,17 @@ function estimateTargetBaseCredits(target: MonitorTarget): number {
   if (target.type === "scrape") {
     return target.urls.length * creditsPerPage;
   }
+  if (target.type === "search") {
+    if (target.depth === "standard") {
+      return Math.max(1, target.queries.length);
+    }
+    return (
+      target.maxResults *
+      estimateBaseCreditsPerPage({
+        formats: [{ type: "json" }],
+      } as MonitorTarget["scrapeOptions"])
+    );
+  }
 
   const limit =
     typeof target.crawlOptions?.limit === "number"
@@ -154,6 +165,9 @@ function estimateTargetBaseCredits(target: MonitorTarget): number {
 function estimateTargetPageCount(target: MonitorTarget): number {
   if (target.type === "scrape") {
     return target.urls.length;
+  }
+  if (target.type === "search") {
+    return target.maxResults;
   }
 
   const limit =
