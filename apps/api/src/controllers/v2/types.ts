@@ -1282,6 +1282,8 @@ export type Document = {
     scrapeId?: string;
     error?: string;
     numPages?: number;
+    pagesProcessed?: number;
+    originalTotalPages?: number;
     contentType?: string;
     timezone?: string;
     proxyUsed: "basic" | "stealth";

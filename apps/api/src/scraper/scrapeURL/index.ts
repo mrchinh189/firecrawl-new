@@ -994,6 +994,8 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
         statusCode: engineResult.statusCode,
         error: engineResult.error,
         numPages: engineResult.pdfMetadata?.numPages,
+        pagesProcessed: engineResult.pdfMetadata?.pagesProcessed,
+        originalTotalPages: engineResult.pdfMetadata?.originalTotalPages,
         ...(engineResult.pdfMetadata?.title
           ? { title: engineResult.pdfMetadata.title }
           : {}),
