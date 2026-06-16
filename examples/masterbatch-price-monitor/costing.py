@@ -8,7 +8,6 @@ Lưu ý: mỗi lần chạy tính giá thành từ GIÁ MỚI NHẤT và lưu 1 
 hướng dựng tích lũy từ lúc bắt đầu chạy trở đi — không hồi tố giá thành quá khứ.
 """
 
-import db
 from normalize import to_vnd_per_kg
 from config import RECIPE, COST_LABEL
 
@@ -30,28 +29,12 @@ def _recipe_row(entry):
     return nhan, keywords, ty_le, fallback, exclude
 
 
-def compute_cost(conn) -> tuple:
-    """Trả về (gia_thanh_vnd_per_kg, breakdown). breakdown: list dòng chi tiết."""
-    fx = db.get_fx_rates(conn)
-    latest = db.latest_prices_all(conn)
-
-    # Cảnh báo nếu tổng tỷ lệ công thức lệch xa 100%
-    tong_ty_le = sum(_recipe_row(e)[2] for e in RECIPE)
-    if abs(tong_ty_le - 1.0) > 0.001:
-        print(f"[costing][CẢNH BÁO] Tổng tỷ lệ RECIPE = {tong_ty_le:.3f} (nên = 1.0)")
-
-    # Quy đổi sẵn về VND/kg (bỏ chỉ báo vĩ mô / tỷ giá)
-    normalized = []
-    for row in latest:
-        if row.get("nhom") in _EXCLUDE_GROUPS:
-            continue
-        vnd, ok = to_vnd_per_kg(row["gia"], row["don_vi"], fx)
-        if ok:
-            normalized.append({**row, "vnd_per_kg": vnd})
-
+def cost_from_normalized(normalized: list, recipe: list) -> tuple:
+    """Logic thuần (không DB): từ danh sách giá đã quy đổi VND/kg + công thức,
+    trả về (tong, breakdown). Tách riêng để test dễ dàng."""
     breakdown = []
     tong = 0.0
-    for entry in RECIPE:
+    for entry in recipe:
         nhan, keywords, ty_le, fallback, exclude = _recipe_row(entry)
         matches = [r for r in normalized if _match(r["ten_vat_lieu"], keywords, exclude)]
         if matches:
@@ -73,7 +56,31 @@ def compute_cost(conn) -> tuple:
     return tong, breakdown
 
 
+def compute_cost(conn) -> tuple:
+    """Trả về (gia_thanh_vnd_per_kg, breakdown). breakdown: list dòng chi tiết."""
+    import db
+    fx = db.get_fx_rates(conn)
+    latest = db.latest_prices_all(conn)
+
+    # Cảnh báo nếu tổng tỷ lệ công thức lệch xa 100%
+    tong_ty_le = sum(_recipe_row(e)[2] for e in RECIPE)
+    if abs(tong_ty_le - 1.0) > 0.001:
+        print(f"[costing][CẢNH BÁO] Tổng tỷ lệ RECIPE = {tong_ty_le:.3f} (nên = 1.0)")
+
+    # Quy đổi sẵn về VND/kg (bỏ chỉ báo vĩ mô / tỷ giá)
+    normalized = []
+    for row in latest:
+        if row.get("nhom") in _EXCLUDE_GROUPS:
+            continue
+        vnd, ok = to_vnd_per_kg(row["gia"], row["don_vi"], fx)
+        if ok:
+            normalized.append({**row, "vnd_per_kg": vnd})
+
+    return cost_from_normalized(normalized, RECIPE)
+
+
 def compute_and_store(conn) -> tuple:
+    import db
     tong, breakdown = compute_cost(conn)
     db.insert_price(
         conn,
@@ -103,6 +110,7 @@ def format_breakdown(tong: float, breakdown: list) -> str:
 
 
 if __name__ == "__main__":
+    import db
     from dotenv import load_dotenv
     load_dotenv()
     conn = db.connect()

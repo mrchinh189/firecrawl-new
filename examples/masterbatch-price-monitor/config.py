@@ -216,3 +216,18 @@ RECIPE = [
     ("Phụ gia (stearic/PE wax)", ["stearic", "pe wax", "polyethylene wax"], 0.02, 35000.0, []),
 ]
 COST_LABEL = "Giá thành masterbatch (công thức)"
+
+
+# ===========================================================================
+# E) DỰ BÁO — chuỗi dẫn dắt dầu/naphtha -> resin (trễ ~5 tuần)
+# ===========================================================================
+# Mỗi mục: (tên chỉ báo dẫn dắt trong DB, [từ khóa resin mục tiêu], độ trễ tuần,
+#           độ co giãn beta = %resin thay đổi cho mỗi 1% chỉ báo thay đổi).
+# beta=None -> tự ước lượng bằng hồi quy nếu đủ dữ liệu, ngược lại dùng BETA_FALLBACK.
+FORECAST = [
+    ("Naphtha", ["pp", "polypropylene"], 5, None),
+    ("Naphtha", ["lldpe", "ldpe", "hdpe", "polyethylene"], 5, None),
+]
+FORECAST_BETA_FALLBACK = 0.6   # co giãn mặc định khi thiếu dữ liệu hồi quy
+FORECAST_LOOKBACK_WEEKS = 4    # so sánh thay đổi chỉ báo trong N tuần gần nhất
+FORECAST_ALERT_PERCENT = 5     # cảnh báo sớm nếu dự báo resin biến động >= %

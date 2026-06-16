@@ -143,7 +143,26 @@ Biểu đồ xuất ra thư mục `charts/`.
 | `report.py`  | So sánh nguồn rẻ nhất + xuất CSV |
 | `alerts.py`  | Gửi cảnh báo Telegram + Email |
 | `chart.py`   | Vẽ biểu đồ xu hướng giá |
+| `forecast.py`| Dự báo sớm naphtha → resin (trễ ~5 tuần) |
+| `dashboard.py`| Dashboard Streamlit đọc từ Postgres |
+| `verify_sources.py` | Kiểm tra truy cập các URL nguồn (chạy trên máy bạn) |
+| `test_normalize.py`, `test_costing.py` | Test logic (không cần DB/mạng) |
 | `monitor.py` | Điều phối toàn bộ quy trình |
+
+### Chạy thêm
+
+```bash
+python verify_sources.py          # kiểm tra URL nào 200/403/404
+python -m pytest -q               # hoặc: python test_normalize.py && python test_costing.py
+streamlit run dashboard.py        # mở dashboard trực quan
+python forecast.py                # in dự báo sớm naphtha -> resin
+```
+
+> ⚠️ **Quan trọng — nhiều nguồn chặn IP datacenter (trả 403):** businessanalytiq,
+> baobianhsang, ThePlasticsExchange, Trading Economics, Made-in-China... chặn bot
+> ở tầng IP. Tức **self-host fetch/Playlist thường sẽ bị 403** — các nguồn này
+> cần **Firecrawl cloud** (Fire-engine stealth + xoay IP) hoặc proxy residential.
+> Dùng `verify_sources.py` trên máy/IP của bạn để biết nguồn nào truy cập được.
 
 ## 7. Giá thành theo công thức
 

@@ -126,6 +126,14 @@ def main() -> None:
     except Exception as e:  # noqa: BLE001
         print(f"[report][LỖI] {e}")
 
+    # --- 5b) Dự báo sớm naphtha -> resin ---
+    print("=== 5b) Dự báo sớm (naphtha -> resin) ===")
+    try:
+        from forecast import run_forecast, format_forecast
+        print(format_forecast(run_forecast(conn)))
+    except Exception as e:  # noqa: BLE001
+        print(f"[forecast][LỖI] {e}")
+
     conn.close()
 
     print("=== 6) Vẽ biểu đồ xu hướng ===")
