@@ -3,16 +3,31 @@
 Quy đổi mọi giá NVL về VND/kg, khớp với từng thành phần công thức (chọn nguồn
 rẻ nhất), rồi tính giá thành theo tỷ lệ. Kết quả được lưu lại như một "mặt hàng"
 (nhom='gia_thanh') nên tự động lên biểu đồ xu hướng.
+
+Lưu ý: mỗi lần chạy tính giá thành từ GIÁ MỚI NHẤT và lưu 1 điểm. Biểu đồ xu
+hướng dựng tích lũy từ lúc bắt đầu chạy trở đi — không hồi tố giá thành quá khứ.
 """
 
 import db
 from normalize import to_vnd_per_kg
 from config import RECIPE, COST_LABEL
 
+# Các nhóm không phải NVL mua -> không đưa vào tính giá thành.
+_EXCLUDE_GROUPS = {"ty_gia", "gia_thanh", "chi_so_vimo"}
 
-def _match(name: str, keywords: list[str]) -> bool:
+
+def _match(name: str, keywords: list[str], exclude: list[str]) -> bool:
     n = (name or "").lower()
+    if any(x in n for x in exclude):
+        return False
     return any(k in n for k in keywords)
+
+
+def _recipe_row(entry):
+    """Hỗ trợ cả tuple 4 phần tử (cũ) lẫn 5 phần tử (có exclude)."""
+    nhan, keywords, ty_le, fallback = entry[0], entry[1], entry[2], entry[3]
+    exclude = entry[4] if len(entry) > 4 else []
+    return nhan, keywords, ty_le, fallback, exclude
 
 
 def compute_cost(conn) -> tuple:
@@ -20,17 +35,25 @@ def compute_cost(conn) -> tuple:
     fx = db.get_fx_rates(conn)
     latest = db.latest_prices_all(conn)
 
-    # Quy đổi sẵn về VND/kg
+    # Cảnh báo nếu tổng tỷ lệ công thức lệch xa 100%
+    tong_ty_le = sum(_recipe_row(e)[2] for e in RECIPE)
+    if abs(tong_ty_le - 1.0) > 0.001:
+        print(f"[costing][CẢNH BÁO] Tổng tỷ lệ RECIPE = {tong_ty_le:.3f} (nên = 1.0)")
+
+    # Quy đổi sẵn về VND/kg (bỏ chỉ báo vĩ mô / tỷ giá)
     normalized = []
     for row in latest:
+        if row.get("nhom") in _EXCLUDE_GROUPS:
+            continue
         vnd, ok = to_vnd_per_kg(row["gia"], row["don_vi"], fx)
         if ok:
             normalized.append({**row, "vnd_per_kg": vnd})
 
     breakdown = []
     tong = 0.0
-    for nhan, keywords, ty_le, fallback in RECIPE:
-        matches = [r for r in normalized if _match(r["ten_vat_lieu"], keywords)]
+    for entry in RECIPE:
+        nhan, keywords, ty_le, fallback, exclude = _recipe_row(entry)
+        matches = [r for r in normalized if _match(r["ten_vat_lieu"], keywords, exclude)]
         if matches:
             best = min(matches, key=lambda r: r["vnd_per_kg"])
             don_gia = best["vnd_per_kg"]

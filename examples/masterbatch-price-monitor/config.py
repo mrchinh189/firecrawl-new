@@ -183,10 +183,11 @@ MANUAL_PRICES_CSV = "manual_prices.csv"
 FX_FALLBACK = {"USD": 25400.0, "EUR": 27500.0, "CNY": 3500.0, "MYR": 5400.0}
 
 # Công thức phối trộn (tỷ lệ khối lượng). CHỈNH theo công thức thực tế của bạn.
-# (nhãn, [từ khóa khớp tên trong DB], tỷ lệ, giá dự phòng VND/kg)
+# (nhãn, [từ khóa khớp], tỷ lệ, giá dự phòng VND/kg, [từ khóa LOẠI TRỪ] (tùy chọn))
+# exclude giúp tránh khớp nhầm, vd "polyethylene" của hạt nhựa nền không bắt "polyethylene wax".
 RECIPE = [
-    ("Bột đá CaCO3", ["caco3", "calcium carbonate", "bột đá", "carbonate"], 0.80, 2500.0),
-    ("Hạt nhựa nền PE (LLDPE)", ["lldpe", "ldpe", "hdpe", "polyethylene"], 0.18, 32000.0),
-    ("Phụ gia (stearic/PE wax)", ["stearic", "pe wax", "polyethylene wax"], 0.02, 35000.0),
+    ("Bột đá CaCO3", ["caco3", "calcium carbonate", "bột đá", "carbonate"], 0.80, 2500.0, []),
+    ("Hạt nhựa nền PE (LLDPE)", ["lldpe", "ldpe", "hdpe", "polyethylene"], 0.18, 32000.0, ["wax"]),
+    ("Phụ gia (stearic/PE wax)", ["stearic", "pe wax", "polyethylene wax"], 0.02, 35000.0, []),
 ]
 COST_LABEL = "Giá thành masterbatch (công thức)"
