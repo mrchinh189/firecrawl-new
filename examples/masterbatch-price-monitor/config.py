@@ -29,7 +29,7 @@ MATERIALS = [
     dict(code="ldpe", ten="LDPE", nhom="resin", uu_tien=1, spend=0,
          ba="ldpe", sina=None, tu_khoa=["ldpe"]),
     dict(code="mlldpe", ten="mLLDPE (metallocene)", nhom="resin", uu_tien=2, spend=0,
-         ba=None, sina=None, tu_khoa=["mlldpe", "metallocene"]),
+         ba="mlldpe", sina=None, tu_khoa=["mlldpe", "metallocene"]),
     dict(code="vistamaxx", ten="Vistamaxx (PBE)", nhom="resin", uu_tien=3, spend=0,
          ba=None, sina=None, tu_khoa=["vistamaxx", "pbe"]),
     # --- PP ---
@@ -75,6 +75,9 @@ MATERIALS = [
          ba=None, sina=None, tu_khoa=["calcium stearate"]),
     dict(code="coupling", ten="Coupling agent", nhom="additive", uu_tien=3, spend=5,
          ba=None, sina=None, tu_khoa=["coupling agent", "silane"]),
+    # Maleic anhydride: gốc phổ biến của coupling agent (MAH-grafted) — dùng làm chỉ báo giá.
+    dict(code="maleic", ten="Maleic anhydride (gốc coupling)", nhom="additive", uu_tien=3, spend=0,
+         ba="maleic-anhydride", sina=None, tu_khoa=["maleic anhydride", "maleic"]),
 ]
 
 # Feedstock — CHỈ BÁO dự báo (chuỗi dầu->naphtha->monomer->resin, trễ ~5 tuần).
@@ -104,10 +107,32 @@ def _ba_url(slug: str) -> str:
 
 # Tự suy URL businessanalytiq từ catalog + feedstock
 _ba_slugs = [m["ba"] for m in MATERIALS if m.get("ba")] + [f["ba"] for f in FEEDSTOCK if f.get("ba")]
-WEB_PRICE_URLS = [_ba_url(s) for s in dict.fromkeys(_ba_slugs)] + [
-    "https://www.theplasticsexchange.com/",                       # TPE: PE/PP/PS/PVC/PET
+
+# Nguồn cập nhật hằng ngày, self-host thường cào được (Tier 1-2).
+WEB_SOURCES_FRESH = [
+    "https://www.theplasticsexchange.com/",                       # giá spot PE/PP/PS/PVC/PET (Mỹ)
     "https://www.mpoc.org.my/market-insight/daily-palm-oil-prices/",  # dầu cọ (nền stearic)
+    "https://plastic4trade.com/todays-latest-polymer-news-price-update",  # HDPE/LDPE/PP/PVC
+    "https://baobianhsang.vn/gia-hat-nhua-nguyen-sinh",           # giá hạt nhựa VN (ngày)
+    "https://baobianhsang.vn/gia-hat-nhua-pa",                    # PA66 VN (ngày)
+    "https://www.plas.com/news/details/1604",                     # giá TQ theo ngày (bài mẫu)
+    "https://www.polymerupdate.com/News/Details/1445452",         # LDPE/PE châu Á (bài mẫu)
 ]
+
+WEB_PRICE_URLS = [_ba_url(s) for s in dict.fromkeys(_ba_slugs)] + WEB_SOURCES_FRESH
+
+# Nguồn chống bot mạnh — cần Firecrawl cloud hoặc proxy (cào ở batch riêng).
+# Trên self-host không proxy, các URL này thường fail (non-fatal, bỏ qua).
+WEB_PRICE_URLS_ANTIBOT = [
+    "https://tradingeconomics.com/commodity/naphtha",             # naphtha ~real-time
+    "https://www.made-in-china.com/products-search/hot-china-products/Flame_Retardant_Additive_Price.html",
+    "https://www.made-in-china.com/products-search/hot-china-products/Calcium_Stearate_Price.html",
+    "https://www.made-in-china.com/products-search/hot-china-products/Paraffin_Oil_Price.html",
+    "https://www.made-in-china.com/products-search/hot-china-products/Uv_Stabilizer_P_Price.html",
+    "https://www.made-in-china.com/products-search/hot-china-products/Silane_Coupling_Agent_Price.html",
+]
+# Chế độ proxy cho nhóm chống bot (yêu cầu Fire-engine/cloud). "auto" | "stealth" | "basic".
+ANTIBOT_PROXY = "auto"
 
 # Trang tỷ giá (schema FX riêng) — Vietcombank
 FX_URLS = [

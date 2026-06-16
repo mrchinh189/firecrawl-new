@@ -39,6 +39,21 @@ fr, ca_st, coupling): copy file mẫu rồi điền giá:
 cp manual_prices.example.csv manual_prices.csv   # rồi điền cột "gia"
 ```
 
+### Độ tươi của nguồn (real-time → tĩnh)
+
+| Mức | Nguồn | Cách lấy |
+|-----|-------|----------|
+| Real-time | Sina/DCE (PP, LLDPE futures) | API trực tiếp ✅ |
+| Real-time | Trading Economics naphtha, Made-in-China | Firecrawl **cần cloud/proxy** (batch riêng) |
+| Hằng ngày | ThePlasticsExchange, plastic4trade, baobianhsang (PE/PA66), plas.com, Polymerupdate | Firecrawl scrape |
+| Hằng tháng | businessanalytiq (24 chỉ số), IMARC | Firecrawl (dùng cho xu hướng) |
+| Bối cảnh | Wikipedia Hormuz, Packaging Europe, market research | Đọc tham khảo, **không** cào giá |
+| Bỏ qua | SunSirs, ECHEMI, LME, ICIS/Argus (paywall) | — |
+
+Nguồn chống bot nằm trong `WEB_PRICE_URLS_ANTIBOT`, cào ở batch riêng với
+`ANTIBOT_PROXY` (cần Fire-engine/cloud). Trên self-host không proxy chúng sẽ
+fail nhẹ (bỏ qua, không lỗi).
+
 ### Nguồn dữ liệu đã tích hợp
 
 | Loại | Nguồn | Cách lấy |

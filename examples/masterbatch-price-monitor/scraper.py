@@ -40,17 +40,21 @@ def _price_formats() -> list:
     ]
 
 
-def batch_scrape_prices(app: FirecrawlApp, urls: list[str]) -> list[dict]:
+def batch_scrape_prices(app: FirecrawlApp, urls: list[str], proxy: str | None = None) -> list[dict]:
     """Cào hàng loạt URL trong 1 job. Trả về danh sách theo từng trang:
         {url, change_status, san_pham: [...]}
     change_status thuộc: new | changed | same | removed (hoặc None nếu SDK cũ).
+    proxy: chế độ proxy cho nguồn chống bot ("auto"/"stealth"/...), None nếu không dùng.
     """
     urls = [u for u in dict.fromkeys(urls) if u]  # bỏ trùng, bỏ rỗng
     if not urls:
         return []
 
+    kwargs = {"formats": _price_formats()}
+    if proxy:
+        kwargs["proxy"] = proxy
     try:
-        job = app.batch_scrape(urls, formats=_price_formats())
+        job = app.batch_scrape(urls, **kwargs)
     except Exception as e:  # noqa: BLE001
         print(f"[batch_scrape][LỖI] {e}")
         return []

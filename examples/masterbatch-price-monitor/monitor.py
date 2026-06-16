@@ -18,7 +18,10 @@ from dotenv import load_dotenv
 import db
 from alerts import notify
 from chart import render_charts
-from config import WEB_PRICE_URLS, FX_URLS, SEARCH_QUERIES, STORE_UNCHANGED, MANUAL_PRICES_CSV
+from config import (
+    WEB_PRICE_URLS, WEB_PRICE_URLS_ANTIBOT, ANTIBOT_PROXY,
+    FX_URLS, SEARCH_QUERIES, STORE_UNCHANGED, MANUAL_PRICES_CSV,
+)
 from scraper import (
     make_client, batch_scrape_prices, scrape_fx, discover_urls_via_search,
 )
@@ -68,21 +71,30 @@ def main() -> None:
     conn = db.connect()
     db.init_db(conn)
 
+    def xu_ly_pages(pages):
+        n_luu = n_bo = 0
+        for page in pages:
+            if page["change_status"] == "same" and not STORE_UNCHANGED:
+                n_bo += 1
+                continue
+            for item in page["san_pham"]:
+                check_alert(conn, item, page["url"], threshold)
+                db.insert_price(conn, item, page["url"])
+                n_luu += 1
+        return n_luu, n_bo
+
     # --- 1) WEB: batch scrape giá NVL (kèm changeTracking) ---
     discovered = discover_urls_via_search(app, SEARCH_QUERIES) if SEARCH_QUERIES else []
     web_urls = list(dict.fromkeys(list(WEB_PRICE_URLS) + discovered))
     print(f"=== 1) Batch scrape {len(web_urls)} URL giá NVL ===")
-    pages = batch_scrape_prices(app, web_urls)
+    luu, bo_qua = xu_ly_pages(batch_scrape_prices(app, web_urls))
 
-    luu = bo_qua = 0
-    for page in pages:
-        if page["change_status"] == "same" and not STORE_UNCHANGED:
-            bo_qua += 1
-            continue
-        for item in page["san_pham"]:
-            check_alert(conn, item, page["url"], threshold)
-            db.insert_price(conn, item, page["url"])
-            luu += 1
+    # --- 1b) Nguồn chống bot (Trading Economics, Made-in-China) — batch riêng + proxy ---
+    if WEB_PRICE_URLS_ANTIBOT:
+        print(f"=== 1b) Batch chống bot {len(WEB_PRICE_URLS_ANTIBOT)} URL (proxy={ANTIBOT_PROXY}) ===")
+        l2, b2 = xu_ly_pages(batch_scrape_prices(app, WEB_PRICE_URLS_ANTIBOT, proxy=ANTIBOT_PROXY))
+        luu += l2
+        bo_qua += b2
 
     # --- 2) FX: tỷ giá Vietcombank ---
     print("=== 2) Tỷ giá (Vietcombank) ===")
