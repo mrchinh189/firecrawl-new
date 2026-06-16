@@ -109,7 +109,27 @@ Mở `config.py` và điền:
 > và gắn cho mỗi trang trạng thái `new` / `changed` / `same` / `removed`. Mặc định
 > bộ này **bỏ qua trang `same`**, chỉ lưu & cảnh báo khi giá thực sự thay đổi.
 
-## 4. Chạy
+## 4. Deploy bằng Docker (khuyến nghị)
+
+Stack gồm 3 service: **db** (Postgres) · **monitor** (chạy theo lịch) · **dashboard** (Streamlit).
+
+```bash
+cp .env.example .env          # điền FIRECRAWL_API_URL/KEY, FRED/EIA key...
+cp manual_prices.example.csv manual_prices.csv   # điền giá NCC nếu cần
+docker compose up -d --build
+```
+
+- Dashboard: http://localhost:8501
+- `monitor` tự chạy lại mỗi `RUN_INTERVAL_HOURS` giờ (mặc định 24).
+- Postgres lưu ở volume `mb_pgdata` (bền giữa các lần khởi động).
+- Chạy 1 lần ngay: `docker compose run --rm monitor monitor-once`
+- Xem log: `docker compose logs -f monitor`
+
+> ⚠️ Cần **Firecrawl chạy sẵn** (self-host hoặc cloud). Đặt `FIRECRAWL_API_URL`
+> (vd `http://host.docker.internal:3002` nếu Firecrawl chạy trên host) hoặc
+> `FIRECRAWL_API_KEY` cho cloud trong `.env`.
+
+## 5. Chạy thủ công (không Docker)
 
 ```bash
 python monitor.py     # cào + lưu + cảnh báo + vẽ biểu đồ
