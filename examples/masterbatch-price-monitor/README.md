@@ -1,0 +1,216 @@
+# Theo dõi giá NVL & phụ gia — Filler Masterbatch 🔥
+
+Bộ công cụ dùng **Firecrawl** để cào, bóc tách và theo dõi giá nguyên vật liệu
+sản xuất hạt nhựa độn (filler masterbatch): **CaCO₃ (bột đá)**, hạt nhựa nền
+(**LLDPE/HDPE/PP**), **axit stearic**, **chất phủ bề mặt**, **dầu trắng**...
+
+Tính năng:
+- ✅ **Batch scrape** — cào hàng loạt URL bảng giá trong 1 job (`json` format + schema)
+- ✅ **changeTracking** — chỉ xử lý khi bảng giá thực sự đổi → tiết kiệm credit, giảm nhiễu
+- ✅ **Nguồn API trực tiếp** — FRED, EIA, Sina/DCE (không qua Firecrawl)
+- ✅ **Tỷ giá** Vietcombank (USD/EUR/CNY)
+- ✅ Lưu **lịch sử giá** vào PostgreSQL
+- ✅ **Quy đổi về VND/kg** — gộp mọi đơn vị/tiền tệ (USD/MT, cents/lb, RM/tonne, CNY/tấn) để so sánh
+- ✅ **Tính giá thành masterbatch** theo công thức phối trộn (tự lên biểu đồ)
+- ✅ **So sánh nguồn rẻ nhất** + xuất báo cáo CSV
+- ✅ Vẽ **biểu đồ xu hướng** giá theo thời gian
+- ✅ **Cảnh báo Telegram/Email** khi giá biến động vượt ngưỡng %
+
+### Catalog vật liệu (`config.MATERIALS`)
+
+24 mã NVL chia 2 nhóm `resin` / `additive`, mỗi mã khai báo nguồn giá. Hệ thống
+**tự suy** URL businessanalytiq và mã Sina/DCE từ catalog:
+- **12 mã** có chỉ số businessanalytiq (lldpe, hdpe, ldpe, pp, abs, pvc, pet,
+  pe_wax, stearic, zinc_st, tio2, base_oil)
+- **2 mã** có futures Sina/DCE (lldpe→`nf_L0`, pp→`nf_PP0`)
+- **12 mã** chỉ có NCC báo giá → nhập qua `manual_prices.csv`
+- **Feedstock** (brent/naphtha/ethylene/propylene) → chỉ báo dự báo, **không** vào giá mua
+
+> ⚠️ Vài slug businessanalytiq là **phỏng đoán** (pe-wax, zinc-stearate,
+> titanium-dioxide, paraffin-wax). Mở URL để xác minh; nếu sai, sửa trường `ba`
+> của mã trong `config.py`. Slug sai chỉ khiến mã đó không có dữ liệu, không lỗi.
+
+### Báo giá NCC nhập tay
+
+Với 12 mã không có nguồn web (mlldpe, vistamaxx, ps, pa, pc, eva, bio, tpe, uv,
+fr, ca_st, coupling): copy file mẫu rồi điền giá:
+
+```bash
+cp manual_prices.example.csv manual_prices.csv   # rồi điền cột "gia"
+```
+
+### Độ tươi của nguồn (real-time → tĩnh)
+
+| Mức | Nguồn | Cách lấy |
+|-----|-------|----------|
+| Real-time | Sina/DCE (PP, LLDPE futures) | API trực tiếp ✅ |
+| Real-time | Trading Economics naphtha, Made-in-China | Firecrawl **cần cloud/proxy** (batch riêng) |
+| Hằng ngày | ThePlasticsExchange, plastic4trade, baobianhsang (PE/PA66), plas.com, Polymerupdate | Firecrawl scrape |
+| Hằng tháng | businessanalytiq (24 chỉ số), IMARC | Firecrawl (dùng cho xu hướng) |
+| Bối cảnh | Wikipedia Hormuz, Packaging Europe, market research | Đọc tham khảo, **không** cào giá |
+| Bỏ qua | SunSirs, ECHEMI, LME, ICIS/Argus (paywall) | — |
+
+Nguồn chống bot nằm trong `WEB_PRICE_URLS_ANTIBOT`, cào ở batch riêng với
+`ANTIBOT_PROXY` (cần Fire-engine/cloud). Trên self-host không proxy chúng sẽ
+fail nhẹ (bỏ qua, không lỗi).
+
+### Nguồn dữ liệu đã tích hợp
+
+| Loại | Nguồn | Cách lấy |
+|------|-------|----------|
+| Web | **businessanalytiq** (14 chỉ số: PP, PE, HDPE, LDPE, LLDPE, ABS, PVC, PET, stearic acid, paraffin wax, carbon black, naphtha, ethylene, propylene) | Firecrawl batch scrape |
+| Web | **ThePlasticsExchange**, **MPOC** (dầu cọ) | Firecrawl batch scrape |
+| Web | **Vietcombank** (tỷ giá) | Firecrawl scrape (schema FX) |
+| API | **FRED** (dầu WTI/Brent...) | HTTP trực tiếp (cần `FRED_API_KEY`) |
+| API | **EIA v2** (giá dầu giao ngay) | HTTP trực tiếp (cần `EIA_API_KEY`) |
+| API | **Sina/DCE** (PP, LLDPE kỳ hạn) | HTTP trực tiếp (cần Referer) |
+| API | **UN Comtrade** (tùy chọn, tắt mặc định) | HTTP trực tiếp |
+
+> ❌ **Không dùng** (paywall/chặn bot): SunSirs/SCI99, ECHEMI, Investing FCPO, LME.
+
+---
+
+## 1. Yêu cầu
+
+- Firecrawl đang chạy (self-host `http://localhost:3002`, hoặc dùng cloud).
+- PostgreSQL (có sẵn trong `docker-compose.yaml` của Firecrawl).
+- Python 3.10+.
+- Để dùng `/extract` (bóc giá bằng AI): set `OPENAI_API_KEY` trong `.env`
+  **của Firecrawl** (thư mục gốc repo), hoặc cấu hình Ollama.
+
+> ⚠️ Bản **self-host không có Fire-engine**. Các sàn chống bot mạnh
+> (Alibaba, Made-in-China) có thể bị chặn → nên dùng **Firecrawl cloud**
+> hoặc khai báo `PROXY_SERVER` trong `.env` của Firecrawl cho các nguồn này.
+
+## 2. Cài đặt
+
+```bash
+cd examples/masterbatch-price-monitor
+pip install -r requirements.txt
+cp .env.example .env      # rồi điền thông tin của bạn
+```
+
+## 3. Cấu hình nguồn giá
+
+Mở `config.py` và điền:
+- `WEB_PRICE_URLS`: URL trang giá cào bằng Firecrawl (đã điền sẵn businessanalytiq, TPE, MPOC).
+- `FX_URLS`: trang tỷ giá (đã điền sẵn Vietcombank).
+- `FRED_SERIES` / `EIA_REQUESTS` / `SINA_SYMBOLS`: nguồn API trực tiếp.
+- `EXTRACT_PROMPT`: tinh chỉnh mô tả dữ liệu cần bóc (đã viết sẵn cho ngành nhựa).
+- `CHANGE_TRACKING_TAG`: nhãn để Firecrawl so sánh giữa các lần cào.
+- `STORE_UNCHANGED`: `False` để bỏ qua trang không đổi (gọn DB), `True` để luôn lưu.
+
+Điền key trong `.env`: `FRED_API_KEY`, `EIA_API_KEY` (và `COMTRADE_PRIMARY_KEY` nếu bật Comtrade).
+
+> ⚠️ **Sina/DCE**: layout trường giá của futures nội địa (`nf_`) có thể đổi. Nếu giá
+> lấy về sai, chỉnh chỉ số trường trong `SINA_SYMBOLS` (tham số cuối mỗi mã).
+
+> **changeTracking hoạt động thế nào:** Firecrawl ghi nhớ lần cào trước theo `tag`
+> và gắn cho mỗi trang trạng thái `new` / `changed` / `same` / `removed`. Mặc định
+> bộ này **bỏ qua trang `same`**, chỉ lưu & cảnh báo khi giá thực sự thay đổi.
+
+## 4. Deploy bằng Docker (khuyến nghị)
+
+Stack gồm 3 service: **db** (Postgres) · **monitor** (chạy theo lịch) · **dashboard** (Streamlit).
+
+```bash
+cp .env.example .env          # điền FIRECRAWL_API_URL/KEY, FRED/EIA key...
+cp manual_prices.example.csv manual_prices.csv   # điền giá NCC nếu cần
+docker compose up -d --build
+```
+
+- Dashboard: http://localhost:8501
+- `monitor` tự chạy lại mỗi `RUN_INTERVAL_HOURS` giờ (mặc định 24).
+- Postgres lưu ở volume `mb_pgdata` (bền giữa các lần khởi động).
+- Chạy 1 lần ngay: `docker compose run --rm monitor monitor-once`
+- Xem log: `docker compose logs -f monitor`
+
+> ⚠️ Cần **Firecrawl chạy sẵn** (self-host hoặc cloud). Đặt `FIRECRAWL_API_URL`
+> (vd `http://host.docker.internal:3002` nếu Firecrawl chạy trên host) hoặc
+> `FIRECRAWL_API_KEY` cho cloud trong `.env`.
+
+## 5. Chạy thủ công (không Docker)
+
+```bash
+python monitor.py     # cào + lưu + cảnh báo + vẽ biểu đồ
+python chart.py       # chỉ vẽ lại biểu đồ từ dữ liệu đã có
+```
+
+Biểu đồ xuất ra thư mục `charts/`.
+
+## 5. Lập lịch tự động
+
+**Windows (Task Scheduler):** tạo task chạy hằng ngày với lệnh
+`python C:\duong-dan\monitor.py`.
+
+**Linux/macOS (cron):** ví dụ chạy 8h sáng mỗi ngày:
+```cron
+0 8 * * * cd /path/to/masterbatch-price-monitor && python monitor.py >> monitor.log 2>&1
+```
+
+## 6. Cấu trúc
+
+| File | Vai trò |
+|------|---------|
+| `config.py`  | Nguồn giá (web + API), prompt — **nơi bạn chỉnh chính** |
+| `schema.py`  | Cấu trúc JSON giá & tỷ giá mà AI bóc ra |
+| `scraper.py` | Firecrawl: batch scrape (json + changeTracking), FX, `/search` |
+| `apis.py`    | Nguồn API trực tiếp: FRED, EIA, Sina/DCE, Comtrade |
+| `manual.py`  | Nạp báo giá NCC nhập tay từ `manual_prices.csv` |
+| `db.py`      | Lưu/đọc lịch sử giá, tỷ giá trong PostgreSQL |
+| `normalize.py` | Quy đổi mọi giá về VND/kg (dùng tỷ giá) |
+| `costing.py` | Tính giá thành masterbatch theo công thức `RECIPE` |
+| `report.py`  | So sánh nguồn rẻ nhất + xuất CSV |
+| `alerts.py`  | Gửi cảnh báo Telegram + Email |
+| `chart.py`   | Vẽ biểu đồ xu hướng giá |
+| `forecast.py`| Dự báo sớm naphtha → resin (trễ ~5 tuần) |
+| `dashboard.py`| Dashboard Streamlit đọc từ Postgres |
+| `verify_sources.py` | Kiểm tra truy cập các URL nguồn (chạy trên máy bạn) |
+| `test_normalize.py`, `test_costing.py` | Test logic (không cần DB/mạng) |
+| `monitor.py` | Điều phối toàn bộ quy trình |
+
+### Chạy thêm
+
+```bash
+python verify_sources.py          # kiểm tra URL nào 200/403/404
+python -m pytest -q               # hoặc: python test_normalize.py && python test_costing.py
+streamlit run dashboard.py        # mở dashboard trực quan
+python forecast.py                # in dự báo sớm naphtha -> resin
+```
+
+> ⚠️ **Quan trọng — nhiều nguồn chặn IP datacenter (trả 403):** businessanalytiq,
+> baobianhsang, ThePlasticsExchange, Trading Economics, Made-in-China... chặn bot
+> ở tầng IP. Tức **self-host fetch/Playlist thường sẽ bị 403** — các nguồn này
+> cần **Firecrawl cloud** (Fire-engine stealth + xoay IP) hoặc proxy residential.
+> Dùng `verify_sources.py` trên máy/IP của bạn để biết nguồn nào truy cập được.
+
+## 7. Giá thành theo công thức
+
+Chỉnh `RECIPE` trong `config.py` theo công thức phối trộn thực tế của bạn:
+
+```python
+RECIPE = [
+    ("Bột đá CaCO3",    ["caco3", "calcium carbonate", "bột đá"], 0.80, 2500.0),
+    ("Hạt nhựa nền PE", ["lldpe", "ldpe", "hdpe", "polyethylene"], 0.18, 32000.0),
+    ("Axit stearic",    ["stearic"],                               0.02, 35000.0),
+]
+```
+
+Mỗi lần chạy, `monitor.py` quy đổi giá NVL về VND/kg, chọn **nguồn rẻ nhất** cho
+từng thành phần, tính **giá thành** theo tỷ lệ và lưu lại như một mặt hàng
+(`nhom='gia_thanh'`) → tự động có biểu đồ xu hướng giá thành.
+
+Chạy riêng:
+```bash
+python costing.py    # in bảng cấu thành giá thành
+python report.py     # in nguồn rẻ nhất + xuất reports/gia_YYYYMMDD.csv
+```
+
+> Giá dự phòng (số cuối mỗi dòng RECIPE) và `FX_FALLBACK` chỉ dùng khi chưa cào
+> được dữ liệu thật — nên cập nhật cho sát thị trường.
+
+## 8. Gợi ý mở rộng thêm
+
+- **Tương quan dầu thô ↔ nhựa:** dùng chuỗi WTI/Brent (FRED/EIA) để dự báo xu hướng giá hạt nhựa.
+- **Dashboard web** (Streamlit/Grafana) đọc từ Postgres.
+- **Lịch sử tỷ giá** để quy đổi giá quá khứ theo đúng tỷ giá từng ngày.

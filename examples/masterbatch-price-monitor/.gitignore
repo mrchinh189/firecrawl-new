@@ -1,0 +1,4 @@
+charts/
+reports/
+.env
+manual_prices.csv

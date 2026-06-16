@@ -1,0 +1,46 @@
+# Stack deploy bộ theo dõi giá masterbatch: Postgres + monitor (theo lịch) + dashboard.
+# Chạy:  docker compose up -d --build
+# Lưu ý: cần Firecrawl chạy sẵn (self-host hoặc cloud) — set FIRECRAWL_API_URL/KEY trong .env.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PGUSER:-firecrawl}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-firecrawl_password}
+      POSTGRES_DB: ${PGDATABASE:-firecrawl}
+    volumes:
+      - mb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-firecrawl}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  monitor:
+    build: .
+    env_file: .env
+    environment:
+      PGHOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["scheduler"]
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    env_file: .env
+    environment:
+      PGHOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["dashboard"]
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    restart: unless-stopped
+
+volumes:
+  mb_pgdata:
