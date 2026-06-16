@@ -23,6 +23,8 @@ from scraper import (
     make_client, batch_scrape_prices, scrape_fx, discover_urls_via_search,
 )
 from apis import fetch_all_apis
+from costing import compute_and_store, format_breakdown
+from report import export_csv, print_summary
 
 
 def check_alert(conn, item: dict, nguon_url: str, threshold: float) -> None:
@@ -90,9 +92,26 @@ def main() -> None:
     luu += store_rows(conn, fetch_all_apis(), threshold)
 
     print(f"=== Đã lưu {luu} mục, bỏ qua {bo_qua} trang web không đổi ===")
+
+    # --- 4) Tính giá thành masterbatch theo công thức ---
+    print("=== 4) Tính giá thành theo công thức ===")
+    try:
+        tong, breakdown = compute_and_store(conn)
+        print(format_breakdown(tong, breakdown))
+    except Exception as e:  # noqa: BLE001
+        print(f"[costing][LỖI] {e}")
+
+    # --- 5) Báo cáo nguồn rẻ nhất + xuất CSV ---
+    print("=== 5) Báo cáo nguồn rẻ nhất ===")
+    try:
+        print_summary(conn)
+        export_csv(conn)
+    except Exception as e:  # noqa: BLE001
+        print(f"[report][LỖI] {e}")
+
     conn.close()
 
-    print("=== 4) Vẽ biểu đồ xu hướng ===")
+    print("=== 6) Vẽ biểu đồ xu hướng ===")
     render_charts()
 
     print("Hoàn tất.")

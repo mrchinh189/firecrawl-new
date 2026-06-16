@@ -10,6 +10,9 @@ Tính năng:
 - ✅ **Nguồn API trực tiếp** — FRED, EIA, Sina/DCE (không qua Firecrawl)
 - ✅ **Tỷ giá** Vietcombank (USD/EUR/CNY)
 - ✅ Lưu **lịch sử giá** vào PostgreSQL
+- ✅ **Quy đổi về VND/kg** — gộp mọi đơn vị/tiền tệ (USD/MT, cents/lb, RM/tonne, CNY/tấn) để so sánh
+- ✅ **Tính giá thành masterbatch** theo công thức phối trộn (tự lên biểu đồ)
+- ✅ **So sánh nguồn rẻ nhất** + xuất báo cáo CSV
 - ✅ Vẽ **biểu đồ xu hướng** giá theo thời gian
 - ✅ **Cảnh báo Telegram/Email** khi giá biến động vượt ngưỡng %
 
@@ -95,14 +98,41 @@ Biểu đồ xuất ra thư mục `charts/`.
 | `schema.py`  | Cấu trúc JSON giá & tỷ giá mà AI bóc ra |
 | `scraper.py` | Firecrawl: batch scrape (json + changeTracking), FX, `/search` |
 | `apis.py`    | Nguồn API trực tiếp: FRED, EIA, Sina/DCE, Comtrade |
-| `db.py`      | Lưu/đọc lịch sử giá trong PostgreSQL |
+| `db.py`      | Lưu/đọc lịch sử giá, tỷ giá trong PostgreSQL |
+| `normalize.py` | Quy đổi mọi giá về VND/kg (dùng tỷ giá) |
+| `costing.py` | Tính giá thành masterbatch theo công thức `RECIPE` |
+| `report.py`  | So sánh nguồn rẻ nhất + xuất CSV |
 | `alerts.py`  | Gửi cảnh báo Telegram + Email |
 | `chart.py`   | Vẽ biểu đồ xu hướng giá |
 | `monitor.py` | Điều phối toàn bộ quy trình |
 
-## 7. Gợi ý mở rộng
+## 7. Giá thành theo công thức
 
-- **Giá vốn theo công thức:** ghép giá NVL với tỉ lệ phối trộn (vd 80% CaCO₃ +
-  18% PE + 2% phụ gia) để tính giá thành masterbatch theo thời gian thực.
-- **So sánh nhà cung cấp:** cùng một mặt hàng, xếp hạng NCC rẻ nhất.
-- **Gắn tỷ giá / giá dầu thô** để dự báo xu hướng.
+Chỉnh `RECIPE` trong `config.py` theo công thức phối trộn thực tế của bạn:
+
+```python
+RECIPE = [
+    ("Bột đá CaCO3",    ["caco3", "calcium carbonate", "bột đá"], 0.80, 2500.0),
+    ("Hạt nhựa nền PE", ["lldpe", "ldpe", "hdpe", "polyethylene"], 0.18, 32000.0),
+    ("Axit stearic",    ["stearic"],                               0.02, 35000.0),
+]
+```
+
+Mỗi lần chạy, `monitor.py` quy đổi giá NVL về VND/kg, chọn **nguồn rẻ nhất** cho
+từng thành phần, tính **giá thành** theo tỷ lệ và lưu lại như một mặt hàng
+(`nhom='gia_thanh'`) → tự động có biểu đồ xu hướng giá thành.
+
+Chạy riêng:
+```bash
+python costing.py    # in bảng cấu thành giá thành
+python report.py     # in nguồn rẻ nhất + xuất reports/gia_YYYYMMDD.csv
+```
+
+> Giá dự phòng (số cuối mỗi dòng RECIPE) và `FX_FALLBACK` chỉ dùng khi chưa cào
+> được dữ liệu thật — nên cập nhật cho sát thị trường.
+
+## 8. Gợi ý mở rộng thêm
+
+- **Tương quan dầu thô ↔ nhựa:** dùng chuỗi WTI/Brent (FRED/EIA) để dự báo xu hướng giá hạt nhựa.
+- **Dashboard web** (Streamlit/Grafana) đọc từ Postgres.
+- **Lịch sử tỷ giá** để quy đổi giá quá khứ theo đúng tỷ giá từng ngày.

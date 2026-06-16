@@ -88,3 +88,27 @@ SINA_REFERER = "https://finance.sina.com.cn"
 
 # --- UN Comtrade (tùy chọn, mặc định TẮT vì là dữ liệu thương mại tháng) ---
 COMTRADE_REQUESTS: list[dict] = []  # thêm khi cần; xem apis.fetch_comtrade
+
+
+# ===========================================================================
+# C) QUY ĐỔI & TÍNH GIÁ THÀNH
+# ===========================================================================
+
+# Tỷ giá dự phòng (VND cho 1 đơn vị tiền) — dùng khi không lấy được từ Vietcombank.
+# CẬP NHẬT định kỳ cho sát thị trường. MYR cần cho giá dầu cọ (RM/tonne).
+FX_FALLBACK = {
+    "USD": 25400.0,
+    "EUR": 27500.0,
+    "CNY": 3500.0,
+    "MYR": 5400.0,
+}
+
+# Công thức phối trộn filler masterbatch (tỷ lệ khối lượng, tổng nên = 1.0).
+# Mỗi thành phần: (nhãn, [từ khóa khớp tên mặt hàng trong DB], tỷ lệ, giá dự phòng VND/kg).
+# CHỈNH theo công thức thực tế của bạn. Giá dự phòng dùng khi chưa cào được mặt hàng đó.
+RECIPE = [
+    ("Bột đá CaCO3", ["caco3", "calcium carbonate", "bột đá", "carbonate", "bot da"], 0.80, 2500.0),
+    ("Hạt nhựa nền PE", ["lldpe", "ldpe", "hdpe", "polyethylene", "pe "], 0.18, 32000.0),
+    ("Axit stearic", ["stearic"], 0.02, 35000.0),
+]
+COST_LABEL = "Giá thành masterbatch (công thức)"

@@ -82,3 +82,36 @@ def distinct_materials(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT ten_vat_lieu FROM material_prices ORDER BY ten_vat_lieu")
         return [r[0] for r in cur.fetchall()]
+
+
+def get_fx_rates(conn) -> dict:
+    """Tỷ giá mới nhất theo từng đồng tiền: {'USD': 25000.0, 'EUR': ...} (VND cho 1 đơn vị)."""
+    rates: dict = {}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT ON (ten_vat_lieu) ten_vat_lieu, gia "
+            "FROM material_prices WHERE nhom = 'ty_gia' "
+            "ORDER BY ten_vat_lieu, captured_at DESC"
+        )
+        for ten, gia in cur.fetchall():
+            # ten dạng: "Tỷ giá USD/VND"
+            for token in str(ten).replace("/", " ").split():
+                t = token.upper()
+                if t in ("USD", "EUR", "CNY", "JPY", "MYR", "RM"):
+                    rates["MYR" if t == "RM" else t] = float(gia)
+                    break
+    return rates
+
+
+def latest_prices_all(conn) -> list:
+    """Mức giá mới nhất của MỌI mặt hàng (để so sánh nguồn, tính giá thành)."""
+    from psycopg2.extras import RealDictCursor
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT DISTINCT ON (ten_vat_lieu, nha_cung_cap) "
+            "ten_vat_lieu, nhom, gia, don_vi, nha_cung_cap, captured_at "
+            "FROM material_prices "
+            "WHERE nhom NOT IN ('ty_gia', 'gia_thanh') "
+            "ORDER BY ten_vat_lieu, nha_cung_cap, captured_at DESC"
+        )
+        return cur.fetchall()
