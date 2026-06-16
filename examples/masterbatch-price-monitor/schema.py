@@ -15,3 +15,14 @@ class MatGia(BaseModel):
 
 class KetQuaTrang(BaseModel):
     san_pham: List[MatGia] = Field(default_factory=list)
+
+
+class TyGia(BaseModel):
+    ma_tien_te: str = Field(description="Mã tiền tệ, vd: USD, EUR, CNY")
+    mua_tien_mat: Optional[float] = Field(default=None, description="Giá mua tiền mặt (VND)")
+    mua_chuyen_khoan: Optional[float] = Field(default=None, description="Giá mua chuyển khoản (VND)")
+    ban: Optional[float] = Field(default=None, description="Giá bán (VND)")
+
+
+class KetQuaTyGia(BaseModel):
+    ty_gia: List[TyGia] = Field(default_factory=list)

@@ -9,8 +9,8 @@ Có 2 chiến lược:
 import os
 from firecrawl import FirecrawlApp
 
-from schema import KetQuaTrang
-from config import EXTRACT_PROMPT, SEARCH_LIMIT, CHANGE_TRACKING_TAG
+from schema import KetQuaTrang, KetQuaTyGia
+from config import EXTRACT_PROMPT, FX_EXTRACT_PROMPT, SEARCH_LIMIT, CHANGE_TRACKING_TAG
 
 
 def make_client() -> FirecrawlApp:
@@ -69,6 +69,37 @@ def batch_scrape_prices(app: FirecrawlApp, urls: list[str]) -> list[dict]:
         print(f"[batch] {url} -> {len(san_pham)} mục giá "
               f"(thay đổi: {_doc_change_status(doc) or 'n/a'})")
     return results
+
+
+def scrape_fx(app: FirecrawlApp, urls: list[str]) -> list[dict]:
+    """Cào trang tỷ giá (Vietcombank) -> danh sách dòng chuẩn hóa USD/EUR/CNY."""
+    urls = [u for u in dict.fromkeys(urls) if u]
+    rows: list[dict] = []
+    for url in urls:
+        try:
+            doc = app.scrape(url, formats=[{
+                "type": "json",
+                "prompt": FX_EXTRACT_PROMPT,
+                "schema": KetQuaTyGia.model_json_schema(),
+            }])
+            data = _doc_json(doc)
+            for tg in (data.get("ty_gia", []) if isinstance(data, dict) else []):
+                gia = tg.get("ban") or tg.get("mua_chuyen_khoan") or tg.get("mua_tien_mat")
+                if gia is None:
+                    continue
+                rows.append({
+                    "ten_vat_lieu": f"Tỷ giá {tg.get('ma_tien_te','?')}/VND",
+                    "nhom": "ty_gia",
+                    "gia": gia,
+                    "don_vi": "VND",
+                    "nha_cung_cap": "Vietcombank",
+                    "ngay_bao_gia": None,
+                    "_nguon_url": url,
+                })
+            print(f"[fx] {url} -> {len(rows)} tỷ giá")
+        except Exception as e:  # noqa: BLE001
+            print(f"[fx][LỖI] {url}: {e}")
+    return rows
 
 
 def discover_urls_via_search(app: FirecrawlApp, queries: list[str]) -> list[str]:

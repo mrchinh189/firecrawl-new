@@ -1,61 +1,90 @@
 """
-Cấu hình nguồn cào giá và danh mục nguyên vật liệu cho filler masterbatch.
+Cấu hình nguồn dữ liệu giá cho filler masterbatch.
 
-Sửa file này để thêm/bớt nhà cung cấp và từ khóa tìm kiếm.
-Không cần đụng tới code logic.
+Có 2 luồng nạp dữ liệu:
+  A. WEB (Firecrawl scrape)  -> WEB_PRICE_URLS, FX_URLS
+  B. API trực tiếp (HTTP)    -> FRED_SERIES, EIA_REQUESTS, SINA_SYMBOLS, COMTRADE_REQUESTS
+
+Sửa file này để thêm/bớt nguồn. Không cần đụng code logic.
+Nguồn bị paywall/chặn bot (SunSirs, ECHEMI, Investing, LME) -> KHÔNG dùng.
 """
 
-# ---------------------------------------------------------------------------
-# 1) Các URL bảng giá / trang sản phẩm muốn cào trực tiếp (dùng /extract).
-#    - Web nhà cung cấp Việt Nam (bảng giá công khai) chạy tốt với self-host.
-#    - Sàn lớn (Alibaba, Made-in-China) chống bot mạnh: nên dùng Firecrawl
-#      cloud hoặc cấu hình PROXY_SERVER trong .env của Firecrawl.
-# ---------------------------------------------------------------------------
-PRICE_URLS = [
-    # Ví dụ — thay bằng URL thật của bạn:
-    # "https://nhuaviet-example.com/bang-gia-caco3",
-    # "https://hatnhua-example.vn/lldpe",
-    # "https://www.alibaba.com/showroom/calcium-carbonate-masterbatch.html",
+# ===========================================================================
+# A) NGUỒN WEB — cào bằng Firecrawl (json + changeTracking)
+# ===========================================================================
+
+_BA = "https://www.businessanalytiq.com/procurementanalytics/index/"
+_BA_SLUGS = [
+    "polypropylene", "polyethylene", "hdpe", "ldpe", "lldpe",
+    "abs", "pvc", "pet", "stearic-acid", "paraffin-wax",
+    "carbon-black", "naphtha", "ethylene", "propylene",
 ]
 
-# ---------------------------------------------------------------------------
-# 2) Từ khóa để TỰ ĐỘNG tìm nguồn giá mới qua /search (web-wide).
-#    Mỗi từ khóa sẽ được search và lấy nội dung các kết quả đầu để bóc giá.
-# ---------------------------------------------------------------------------
-SEARCH_QUERIES = [
-    "giá CaCO3 bột đá phủ stearic sản xuất filler masterbatch",
-    "giá hạt nhựa LLDPE nguyên sinh",
-    "giá hạt nhựa PP nguyên sinh",
-    "giá axit stearic công nghiệp",
-    "giá dầu trắng white oil nhựa",
-    "calcium carbonate masterbatch price per ton",
-    "LLDPE resin price",
-    "PP homopolymer price",
+WEB_PRICE_URLS = [f"{_BA}{slug}-price-index/" for slug in _BA_SLUGS] + [
+    "https://www.theplasticsexchange.com/",
+    "https://www.mpoc.org.my/market-insight/daily-palm-oil-prices/",
 ]
 
-# Số kết quả lấy mỗi truy vấn search
+# Trang tỷ giá (bóc bằng schema FX riêng) — Vietcombank
+FX_URLS = [
+    "https://portal.vietcombank.com.vn/Personal/TG/Pages/ty-gia.aspx",
+]
+
+# (Tùy chọn) Tự tìm thêm nguồn giá mới qua /search. Để rỗng nếu chỉ dùng nguồn cố định.
+SEARCH_QUERIES: list[str] = []
 SEARCH_LIMIT = 5
 
-# ---------------------------------------------------------------------------
-# 2b) changeTracking — Firecrawl ghi nhớ lần cào trước theo "tag" này và báo
-#     mỗi trang là new / changed / same / removed. Giúp chỉ xử lý khi bảng giá
-#     thực sự đổi -> tiết kiệm credit và giảm nhiễu cảnh báo.
-# ---------------------------------------------------------------------------
+# changeTracking: Firecrawl ghi nhớ lần cào trước theo "tag" và báo new/changed/same/removed.
 CHANGE_TRACKING_TAG = "masterbatch-prices"
-
-# Có lưu lại vào DB cả khi trang KHÔNG đổi (change_status == "same") không?
-# False = bỏ qua trang không đổi (gọn DB). True = vẫn lưu mỗi lần (vẽ biểu đồ dày hơn).
+# Lưu cả khi trang KHÔNG đổi? False = bỏ qua trang "same" (gọn DB, tiết kiệm credit).
 STORE_UNCHANGED = False
 
-# ---------------------------------------------------------------------------
-# 3) Prompt mô tả dữ liệu cần bóc — tinh chỉnh để AI hiểu đúng ngành của bạn.
-# ---------------------------------------------------------------------------
 EXTRACT_PROMPT = (
-    "Đây là trang liên quan tới nguyên vật liệu và phụ gia sản xuất filler "
-    "masterbatch (hạt nhựa độn). Hãy lấy MỌI mức giá tìm được cho: bột đá / "
-    "CaCO3 (có hoặc không phủ stearic), hạt nhựa nền (LLDPE, HDPE, PP, EVA), "
-    "axit stearic, chất phủ bề mặt / coupling agent, dầu trắng (white oil), "
-    "chất bôi trơn. Với mỗi mặt hàng lấy: tên, nhóm vật liệu, mức giá, đơn vị "
-    "tính (VND/kg, USD/tấn...), nhà cung cấp và ngày báo giá nếu có. "
-    "Bỏ qua các mục không có giá."
+    "Đây là trang về giá nguyên vật liệu / phụ gia ngành nhựa và filler masterbatch. "
+    "Hãy lấy MỌI mức giá hoặc chỉ số giá (price index) tìm được cho: hạt nhựa "
+    "(PP, PE, HDPE, LDPE, LLDPE, ABS, PVC, PET), naphtha, ethylene, propylene, "
+    "axit stearic (stearic acid), paraffin wax, carbon black, dầu cọ (palm oil). "
+    "Với mỗi mục lấy: tên, nhóm vật liệu, mức giá (số mới nhất), đơn vị tính "
+    "(USD/MT, USD/kg, cents/lb, RM/tonne, CNY/tấn...), nguồn và ngày nếu có. "
+    "Bỏ qua mục không có giá."
 )
+
+FX_EXTRACT_PROMPT = (
+    "Đây là bảng tỷ giá ngoại tệ của ngân hàng. Lấy tỷ giá các đồng tiền chính "
+    "(USD, EUR, CNY) gồm: mã tiền tệ, giá mua tiền mặt, giá mua chuyển khoản, "
+    "giá bán. Đơn vị VND."
+)
+
+# ===========================================================================
+# B) NGUỒN API TRỰC TIẾP — gọi HTTP, không qua Firecrawl
+#    Key lấy từ biến môi trường trong .env (xem .env.example).
+# ===========================================================================
+
+# --- FRED (Federal Reserve Economic Data) ---------------------------------
+# Mỗi mục: (series_id, tên hiển thị, đơn vị, nhóm)
+FRED_SERIES = [
+    ("DCOILWTICO",  "Dầu thô WTI",   "USD/thùng", "chi_so_vimo"),
+    ("DCOILBRENTEU", "Dầu thô Brent", "USD/thùng", "chi_so_vimo"),
+    # Thêm series khác sau khi tra ở /fred/series/search, ví dụ giá nhựa PPI...
+]
+
+# --- EIA v2 (petroleum spot prices) ---------------------------------------
+# Mỗi mục: (tên hiển thị, đơn vị, nhóm, dict params bổ sung cho /v2/petroleum/pri/spt/data/)
+EIA_REQUESTS = [
+    ("Dầu WTI Cushing (EIA)", "USD/thùng", "chi_so_vimo", {"facets[series][]": "RWTC"}),
+    ("Dầu Brent (EIA)",       "USD/thùng", "chi_so_vimo", {"facets[series][]": "RBRTE"}),
+]
+EIA_BASE = "https://api.eia.gov/v2/petroleum/pri/spt/data/"
+
+# --- Sina (DCE futures: PP, LLDPE) ----------------------------------------
+# Mã -> (tên, nhóm, đơn vị, chỉ số trường giá trong chuỗi trả về).
+# Lưu ý: layout trường của futures nội địa (nf_) có thể đổi -> kiểm tra lại nếu sai.
+SINA_SYMBOLS = {
+    "nf_PP0": ("PP kỳ hạn DCE", "hat_nhua_nen", "CNY/tấn", 8),
+    "nf_L0":  ("LLDPE kỳ hạn DCE", "hat_nhua_nen", "CNY/tấn", 8),
+}
+SINA_URL = "https://hq.sinajs.cn/list="
+SINA_REFERER = "https://finance.sina.com.cn"
+
+# --- UN Comtrade (tùy chọn, mặc định TẮT vì là dữ liệu thương mại tháng) ---
+COMTRADE_REQUESTS: list[dict] = []  # thêm khi cần; xem apis.fetch_comtrade

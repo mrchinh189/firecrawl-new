@@ -1,15 +1,15 @@
 """
 Bộ theo dõi giá NVL & phụ gia sản xuất filler masterbatch.
 
-Quy trình mỗi lần chạy:
-  1. Tự tìm thêm nguồn giá mới qua /search (config.SEARCH_QUERIES)
-  2. Cào HÀNG LOẠT (batch scrape) toàn bộ URL trong 1 job, kèm changeTracking
-  3. Bỏ qua trang KHÔNG đổi (nếu STORE_UNCHANGED=False) -> tiết kiệm credit
-  4. So sánh với mức giá gần nhất đã lưu -> cảnh báo nếu biến động > ngưỡng
-  5. Lưu vào Postgres và vẽ lại biểu đồ xu hướng
+Nạp dữ liệu từ 3 luồng vào cùng 1 database:
+  1. WEB (Firecrawl batch scrape + changeTracking): businessanalytiq, TPE, MPOC
+  2. FX (Firecrawl scrape): tỷ giá Vietcombank
+  3. API trực tiếp: FRED, EIA, Sina/DCE, (Comtrade tùy chọn)
+
+Sau đó: so ngưỡng % -> cảnh báo, lưu Postgres, vẽ biểu đồ.
 
 Chạy:  python monitor.py
-Lập lịch: dùng Windows Task Scheduler / cron để chạy hằng ngày.
+Lập lịch: Windows Task Scheduler / cron để chạy hằng ngày.
 """
 
 import os
@@ -18,8 +18,11 @@ from dotenv import load_dotenv
 import db
 from alerts import notify
 from chart import render_charts
-from config import PRICE_URLS, SEARCH_QUERIES, STORE_UNCHANGED
-from scraper import make_client, batch_scrape_prices, discover_urls_via_search
+from config import WEB_PRICE_URLS, FX_URLS, SEARCH_QUERIES, STORE_UNCHANGED
+from scraper import (
+    make_client, batch_scrape_prices, scrape_fx, discover_urls_via_search,
+)
+from apis import fetch_all_apis
 
 
 def check_alert(conn, item: dict, nguon_url: str, threshold: float) -> None:
@@ -38,9 +41,20 @@ def check_alert(conn, item: dict, nguon_url: str, threshold: float) -> None:
         chieu = "TĂNG 📈" if delta > 0 else "GIẢM 📉"
         notify(
             f"<b>{name}</b> {chieu} {abs(delta):.1f}%\n"
-            f"Giá cũ: {gia_cu:,.0f} → Giá mới: {gia_moi:,.0f} {item.get('don_vi','')}\n"
+            f"Giá cũ: {gia_cu:,.2f} → Giá mới: {gia_moi:,.2f} {item.get('don_vi','')}\n"
             f"Nguồn: {nguon_url}"
         )
+
+
+def store_rows(conn, rows: list[dict], threshold: float) -> int:
+    """Lưu danh sách dòng phẳng (FX/API) + cảnh báo. Trả về số dòng đã lưu."""
+    n = 0
+    for item in rows:
+        nguon = item.get("_nguon_url", "")
+        check_alert(conn, item, nguon, threshold)
+        db.insert_price(conn, item, nguon)
+        n += 1
+    return n
 
 
 def main() -> None:
@@ -51,16 +65,14 @@ def main() -> None:
     conn = db.connect()
     db.init_db(conn)
 
-    print("=== 1) Tìm nguồn giá mới qua /search ===")
-    discovered = discover_urls_via_search(app, SEARCH_QUERIES)
-
-    all_urls = list(dict.fromkeys(list(PRICE_URLS) + discovered))
-    print(f"=== 2) Batch scrape {len(all_urls)} URL (kèm changeTracking) ===")
-    pages = batch_scrape_prices(app, all_urls)
+    # --- 1) WEB: batch scrape giá NVL (kèm changeTracking) ---
+    discovered = discover_urls_via_search(app, SEARCH_QUERIES) if SEARCH_QUERIES else []
+    web_urls = list(dict.fromkeys(list(WEB_PRICE_URLS) + discovered))
+    print(f"=== 1) Batch scrape {len(web_urls)} URL giá NVL ===")
+    pages = batch_scrape_prices(app, web_urls)
 
     luu = bo_qua = 0
     for page in pages:
-        # Bỏ qua trang không đổi để tiết kiệm và giữ DB gọn.
         if page["change_status"] == "same" and not STORE_UNCHANGED:
             bo_qua += 1
             continue
@@ -69,10 +81,18 @@ def main() -> None:
             db.insert_price(conn, item, page["url"])
             luu += 1
 
-    print(f"=== Đã lưu {luu} mục giá, bỏ qua {bo_qua} trang không đổi ===")
+    # --- 2) FX: tỷ giá Vietcombank ---
+    print("=== 2) Tỷ giá (Vietcombank) ===")
+    luu += store_rows(conn, scrape_fx(app, FX_URLS), threshold)
+
+    # --- 3) API trực tiếp: FRED / EIA / Sina / Comtrade ---
+    print("=== 3) API trực tiếp (FRED/EIA/Sina/Comtrade) ===")
+    luu += store_rows(conn, fetch_all_apis(), threshold)
+
+    print(f"=== Đã lưu {luu} mục, bỏ qua {bo_qua} trang web không đổi ===")
     conn.close()
 
-    print("=== 3) Vẽ biểu đồ xu hướng ===")
+    print("=== 4) Vẽ biểu đồ xu hướng ===")
     render_charts()
 
     print("Hoàn tất.")
