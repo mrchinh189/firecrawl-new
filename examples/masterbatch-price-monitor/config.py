@@ -37,6 +37,17 @@ SEARCH_QUERIES = [
 SEARCH_LIMIT = 5
 
 # ---------------------------------------------------------------------------
+# 2b) changeTracking — Firecrawl ghi nhớ lần cào trước theo "tag" này và báo
+#     mỗi trang là new / changed / same / removed. Giúp chỉ xử lý khi bảng giá
+#     thực sự đổi -> tiết kiệm credit và giảm nhiễu cảnh báo.
+# ---------------------------------------------------------------------------
+CHANGE_TRACKING_TAG = "masterbatch-prices"
+
+# Có lưu lại vào DB cả khi trang KHÔNG đổi (change_status == "same") không?
+# False = bỏ qua trang không đổi (gọn DB). True = vẫn lưu mỗi lần (vẽ biểu đồ dày hơn).
+STORE_UNCHANGED = False
+
+# ---------------------------------------------------------------------------
 # 3) Prompt mô tả dữ liệu cần bóc — tinh chỉnh để AI hiểu đúng ngành của bạn.
 # ---------------------------------------------------------------------------
 EXTRACT_PROMPT = (

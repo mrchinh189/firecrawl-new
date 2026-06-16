@@ -5,7 +5,8 @@ sản xuất hạt nhựa độn (filler masterbatch): **CaCO₃ (bột đá)**,
 (**LLDPE/HDPE/PP**), **axit stearic**, **chất phủ bề mặt**, **dầu trắng**...
 
 Tính năng:
-- ✅ Cào giá từ danh sách URL bảng giá nhà cung cấp (`/extract` + schema)
+- ✅ **Batch scrape** — cào hàng loạt URL bảng giá trong 1 job (`json` format + schema)
+- ✅ **changeTracking** — chỉ xử lý khi bảng giá thực sự đổi → tiết kiệm credit, giảm nhiễu
 - ✅ Tự tìm nguồn giá mới trên web (`/search`)
 - ✅ Lưu **lịch sử giá** vào PostgreSQL
 - ✅ Vẽ **biểu đồ xu hướng** giá theo thời gian
@@ -39,6 +40,12 @@ Mở `config.py` và điền:
 - `PRICE_URLS`: các URL bảng giá muốn cào trực tiếp.
 - `SEARCH_QUERIES`: từ khóa để tự tìm nguồn giá mới.
 - `EXTRACT_PROMPT`: tinh chỉnh mô tả dữ liệu cần bóc (đã viết sẵn cho masterbatch).
+- `CHANGE_TRACKING_TAG`: nhãn để Firecrawl so sánh giữa các lần cào.
+- `STORE_UNCHANGED`: `False` để bỏ qua trang không đổi (gọn DB), `True` để luôn lưu.
+
+> **changeTracking hoạt động thế nào:** Firecrawl ghi nhớ lần cào trước theo `tag`
+> và gắn cho mỗi trang trạng thái `new` / `changed` / `same` / `removed`. Mặc định
+> bộ này **bỏ qua trang `same`**, chỉ lưu & cảnh báo khi giá thực sự thay đổi.
 
 ## 4. Chạy
 
@@ -65,7 +72,7 @@ Biểu đồ xuất ra thư mục `charts/`.
 |------|---------|
 | `config.py`  | Nguồn giá, từ khóa, prompt — **nơi bạn chỉnh chính** |
 | `schema.py`  | Cấu trúc JSON giá mà AI bóc ra |
-| `scraper.py` | Gọi Firecrawl `/extract` và `/search` |
+| `scraper.py` | Batch scrape (json + changeTracking) và `/search` |
 | `db.py`      | Lưu/đọc lịch sử giá trong PostgreSQL |
 | `alerts.py`  | Gửi cảnh báo Telegram + Email |
 | `chart.py`   | Vẽ biểu đồ xu hướng giá |
