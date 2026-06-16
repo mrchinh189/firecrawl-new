@@ -16,6 +16,29 @@ Tính năng:
 - ✅ Vẽ **biểu đồ xu hướng** giá theo thời gian
 - ✅ **Cảnh báo Telegram/Email** khi giá biến động vượt ngưỡng %
 
+### Catalog vật liệu (`config.MATERIALS`)
+
+24 mã NVL chia 2 nhóm `resin` / `additive`, mỗi mã khai báo nguồn giá. Hệ thống
+**tự suy** URL businessanalytiq và mã Sina/DCE từ catalog:
+- **12 mã** có chỉ số businessanalytiq (lldpe, hdpe, ldpe, pp, abs, pvc, pet,
+  pe_wax, stearic, zinc_st, tio2, base_oil)
+- **2 mã** có futures Sina/DCE (lldpe→`nf_L0`, pp→`nf_PP0`)
+- **12 mã** chỉ có NCC báo giá → nhập qua `manual_prices.csv`
+- **Feedstock** (brent/naphtha/ethylene/propylene) → chỉ báo dự báo, **không** vào giá mua
+
+> ⚠️ Vài slug businessanalytiq là **phỏng đoán** (pe-wax, zinc-stearate,
+> titanium-dioxide, paraffin-wax). Mở URL để xác minh; nếu sai, sửa trường `ba`
+> của mã trong `config.py`. Slug sai chỉ khiến mã đó không có dữ liệu, không lỗi.
+
+### Báo giá NCC nhập tay
+
+Với 12 mã không có nguồn web (mlldpe, vistamaxx, ps, pa, pc, eva, bio, tpe, uv,
+fr, ca_st, coupling): copy file mẫu rồi điền giá:
+
+```bash
+cp manual_prices.example.csv manual_prices.csv   # rồi điền cột "gia"
+```
+
 ### Nguồn dữ liệu đã tích hợp
 
 | Loại | Nguồn | Cách lấy |
@@ -98,6 +121,7 @@ Biểu đồ xuất ra thư mục `charts/`.
 | `schema.py`  | Cấu trúc JSON giá & tỷ giá mà AI bóc ra |
 | `scraper.py` | Firecrawl: batch scrape (json + changeTracking), FX, `/search` |
 | `apis.py`    | Nguồn API trực tiếp: FRED, EIA, Sina/DCE, Comtrade |
+| `manual.py`  | Nạp báo giá NCC nhập tay từ `manual_prices.csv` |
 | `db.py`      | Lưu/đọc lịch sử giá, tỷ giá trong PostgreSQL |
 | `normalize.py` | Quy đổi mọi giá về VND/kg (dùng tỷ giá) |
 | `costing.py` | Tính giá thành masterbatch theo công thức `RECIPE` |

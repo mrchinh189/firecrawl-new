@@ -18,11 +18,12 @@ from dotenv import load_dotenv
 import db
 from alerts import notify
 from chart import render_charts
-from config import WEB_PRICE_URLS, FX_URLS, SEARCH_QUERIES, STORE_UNCHANGED
+from config import WEB_PRICE_URLS, FX_URLS, SEARCH_QUERIES, STORE_UNCHANGED, MANUAL_PRICES_CSV
 from scraper import (
     make_client, batch_scrape_prices, scrape_fx, discover_urls_via_search,
 )
 from apis import fetch_all_apis
+from manual import load_manual_prices
 from costing import compute_and_store, format_breakdown
 from report import export_csv, print_summary
 
@@ -90,6 +91,10 @@ def main() -> None:
     # --- 3) API trực tiếp: FRED / EIA / Sina / Comtrade ---
     print("=== 3) API trực tiếp (FRED/EIA/Sina/Comtrade) ===")
     luu += store_rows(conn, fetch_all_apis(), threshold)
+
+    # --- 3b) Báo giá NCC nhập tay (mã không có nguồn web tự động) ---
+    print("=== 3b) Báo giá NCC (manual_prices.csv) ===")
+    luu += store_rows(conn, load_manual_prices(MANUAL_PRICES_CSV), threshold)
 
     print(f"=== Đã lưu {luu} mục, bỏ qua {bo_qua} trang web không đổi ===")
 
