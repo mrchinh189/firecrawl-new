@@ -1,0 +1,52 @@
+# Danh sách nguồn giá NVL cần theo dõi.
+#
+#   id                  mã duy nhất (dùng làm khóa trong Google Sheets)
+#   parser              mpoc | ppi100 | investing | lme | llm_json
+#   unit                đơn vị giá ghi vào sheet
+#   alert_threshold_pct (tuỳ chọn) ngưỡng % thay đổi để cảnh báo, ghi đè giá trị mặc định
+#   enabled             (tuỳ chọn) false để tạm tắt nguồn
+#   scrape_options      (tuỳ chọn) tham số thêm cho Firecrawl /v2/scrape, vd: { waitFor: 3000 }
+
+timezone: Asia/Ho_Chi_Minh
+alert_threshold_pct: 2.0      # mặc định: cảnh báo khi giá đổi >= 2% so với phiên trước
+scrape_timeout_ms: 60000
+
+sources:
+  - id: CPO_INVESTING
+    name: Dầu cọ thô Malaysia (CPOc1, Investing)
+    url: https://vn.investing.com/commodities/malaysian-crude-palm-oil-futures-streaming-chart
+    parser: investing
+    unit: USD/tấn
+    alert_threshold_pct: 3
+
+  - id: CPO_MPOC
+    name: Dầu cọ thô CPO (MPOC/Bursa)
+    url: https://www.mpoc.org.my/market-insight/daily-palm-oil-prices/
+    parser: mpoc
+    unit: RM/tấn
+    alert_threshold_pct: 3
+
+  - id: H2SO4_100PPI
+    name: Axit sulfuric 硫酸 (100ppi)
+    url: https://m1.100ppi.com/vane/236-%E7%A1%AB%E9%85%B8.html
+    parser: ppi100
+    unit: CNY/tấn
+
+  # Trang https://www.lme.com/en/Metals/Non-ferrous/LME-Zinc tải bảng giá bằng JS
+  # từ API này (datasourceId lấy trong HTML, thẻ <day-delayed-data-table>).
+  # Ghi 2 mã: ZINC_LME_CASH và ZINC_LME_3_MONTH (giá Offer = giá chính thức).
+  - id: ZINC_LME
+    name: Kẽm LME
+    url: https://www.lme.com/api/trading-data/day-delayed?datasourceId=c389e2b0-c4a3-46a0-96ca-69cacbe90ee4
+    parser: lme
+    unit: USD/tấn
+    lme_rows: [Cash, 3-month]
+
+  # Ví dụ thêm nguồn mới không cần viết parser (cần LLM trên Firecrawl self-host:
+  # OPENAI_API_KEY hoặc OLLAMA_BASE_URL trong .env của Firecrawl):
+  # - id: UREA_XYZ
+  #   name: Urê hạt đục
+  #   url: https://example.com/gia-ure
+  #   parser: llm_json
+  #   unit: VND/kg
+  #   llm_prompt: "Lấy giá urê hạt đục mới nhất trên trang (số, không có dấu phân cách)"
