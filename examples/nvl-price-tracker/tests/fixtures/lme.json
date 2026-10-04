@@ -1,0 +1,37 @@
+{
+ "Rows": [
+  {
+   "BusinessDateTime": "2026-10-02T00:00:00",
+   "Ric": "MZN0",
+   "RowTitle": "Cash",
+   "Values": [
+    "3797.00",
+    "3798.00"
+   ]
+  },
+  {
+   "BusinessDateTime": "2026-10-02T00:00:00",
+   "Ric": "MZN3",
+   "RowTitle": "3-month",
+   "Values": [
+    "3732.50",
+    "3733.00"
+   ]
+  },
+  {
+   "BusinessDateTime": "2026-10-02T00:00:00",
+   "Ric": "MZNZYR1",
+   "RowTitle": "Dec-27",
+   "Values": [
+    "3593.00",
+    "3598.00"
+   ]
+  }
+ ],
+ "Title": "LME Zinc Official Prices",
+ "ColumnTitles": [
+  "Contract",
+  "Bid",
+  "Offer"
+ ]
+}
